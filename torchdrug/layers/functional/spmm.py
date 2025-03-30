@@ -9,8 +9,22 @@ from torchdrug import utils
 module = sys.modules[__name__]
 
 path = os.path.join(os.path.dirname(__file__), "extension")
-spmm = utils.load_extension("spmm", [os.path.join(path, "spmm.cpp"), os.path.join(path, "rspmm.cpp"),
-                                     os.path.join(path, "spmm.cu"), os.path.join(path, "rspmm.cu")])
+spmm = utils.load_extension(
+    "spmm", [
+        os.path.join(path, "spmm.cpp"), os.path.join(path, "rspmm.cpp"),
+        # os.path.join(path, "spmm.cu"), os.path.join(path, "rspmm.cu")
+    ],
+    extra_cflags=[
+        "-Xpreprocessor", "-fopenmp",
+        "-I/usr/local/opt/libomp/include"
+    ],
+    extra_cuda_cflags=[
+        "-lomp",
+        "-L/usr/local/opt/libomp/lib"
+    ],
+    extra_include_paths=["/usr/local/opt/libomp/include"],
+    verbose=True,
+)
 
 
 class SPMMAddMulFunction(autograd.Function):

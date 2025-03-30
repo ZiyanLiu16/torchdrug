@@ -38,7 +38,7 @@ void rspmm_backward_check(CheckedFrom c, const TensorArg &sparse_arg, const Tens
     checkSize(c, output_arg, {sparse_arg->size(0), input_arg->size(1)});
 }
 
-std::tuple<Tensor, Tensor, Tensor, Tensor> coo2csr3d(const SparseTensor &sparse) {
+std::tuple<Tensor, Tensor, Tensor, Tensor> coo2csr3d(const Tensor &sparse) {
     TORCH_CHECK(sparse.is_coalesced(), "Expect coalesced sparse tensor");
     Tensor index = sparse.indices();
     Tensor row_ind = index.select(0, 0);
@@ -54,7 +54,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> coo2csr3d(const SparseTensor &sparse)
     return std::make_tuple(row_ptr, col_ind, layer_ind, value);
 }
 
-SparseTensor csr2coo3d(const Tensor &row_ptr_, const Tensor &col_ind, const Tensor &layer_ind, const Tensor &value,
+Tensor csr2coo3d(const Tensor &row_ptr_, const Tensor &col_ind, const Tensor &layer_ind, const Tensor &value,
                        IntArrayRef size) {
     Tensor row_ptr = row_ptr_.masked_select(row_ptr_ < col_ind.size(0));
     // scatter_add is super slow for int64, due to non-hardware atomic operations
@@ -139,7 +139,7 @@ void rspmm_backward_out_cpu(const int64_t *row_ptr, const int64_t *col_ind, cons
 }
 
 template <template<class> class NaryOp, template<class> class BinaryOp>
-Tensor rspmm_forward_cpu(const SparseTensor &sparse, const Tensor &relation_, const Tensor &input_) {
+Tensor rspmm_forward_cpu(const Tensor &sparse, const Tensor &relation_, const Tensor &input_) {
     constexpr const char *fn_name = "rspmm_forward_cpu";
     TensorArg sparse_arg(sparse, "sparse", 1), relation_arg(relation_, "relation", 2), input_arg(input_, "input", 3);
 
@@ -177,8 +177,8 @@ Tensor rspmm_forward_cpu(const SparseTensor &sparse, const Tensor &relation_, co
 }
 
 template <template<class> class NaryOp, template<class> class BinaryOp>
-std::tuple<SparseTensor, Tensor, Tensor> rspmm_backward_cpu(
-        const SparseTensor &sparse, const Tensor &relation_, const Tensor &input_, const Tensor &output_,
+std::tuple<Tensor, Tensor, Tensor> rspmm_backward_cpu(
+        const Tensor &sparse, const Tensor &relation_, const Tensor &input_, const Tensor &output_,
         const Tensor &output_grad_) {
     constexpr const char *fn_name = "rspmm_backward_cpu";
     TensorArg sparse_arg(sparse, "sparse", 1), relation_arg(relation_, "relation", 2), input_arg(input_, "input", 3),
@@ -198,7 +198,7 @@ std::tuple<SparseTensor, Tensor, Tensor> rspmm_backward_cpu(
     Tensor value_grad = at::zeros_like(sparse.values());
     Tensor relation_grad = at::zeros_like(relation);
     Tensor input_grad = at::zeros_like(input);
-    SparseTensor sparse_grad = at::_sparse_coo_tensor_unsafe(sparse.indices(), value_grad, sparse.sizes());
+    Tensor sparse_grad = at::_sparse_coo_tensor_unsafe(sparse.indices(), value_grad, sparse.sizes());
 
     auto csr = coo2csr3d(sparse);
     Tensor row_ptr = std::get<0>(csr);
@@ -231,13 +231,13 @@ std::tuple<SparseTensor, Tensor, Tensor> rspmm_backward_cpu(
 
 #define DECLARE_FORWARD_IMPL(ADD, MUL, NARYOP, BINARYOP) \
     Tensor rspmm_##ADD##_##MUL##_forward_cpu(                                          \
-            const SparseTensor &sparse, const Tensor &relation, const Tensor &input) { \
+            const Tensor &sparse, const Tensor &relation, const Tensor &input) { \
         return rspmm_forward_cpu<NARYOP, BINARYOP>(sparse, relation, input);           \
     }
 
 #define DECLARE_BACKWARD_IMPL(ADD, MUL, NARYOP, BINARYOP) \
-    std::tuple<SparseTensor, Tensor, Tensor> rspmm_##ADD##_##MUL##_backward_cpu(                                   \
-            const SparseTensor &sparse, const Tensor &relation, const Tensor &input, const Tensor &output, \
+    std::tuple<Tensor, Tensor, Tensor> rspmm_##ADD##_##MUL##_backward_cpu(                                   \
+            const Tensor &sparse, const Tensor &relation, const Tensor &input, const Tensor &output, \
             const Tensor &output_grad) {                                                                   \
         return rspmm_backward_cpu<NARYOP, BINARYOP>(sparse, relation, input, output, output_grad);         \
     }

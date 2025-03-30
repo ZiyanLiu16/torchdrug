@@ -34,7 +34,7 @@ void spmm_backward_check(CheckedFrom c, const TensorArg &sparse_arg, const Tenso
     checkSize(c, output_arg, {sparse_arg->size(0), input_arg->size(1)});
 }
 
-std::tuple<Tensor, Tensor, Tensor> coo2csr(const SparseTensor &sparse) {
+std::tuple<Tensor, Tensor, Tensor> coo2csr(const Tensor &sparse) {
     TORCH_CHECK(sparse.is_coalesced(), "Expect coalesced sparse tensor");
     Tensor index = sparse.indices();
     Tensor row_ind = index.select(0, 0);
@@ -49,7 +49,7 @@ std::tuple<Tensor, Tensor, Tensor> coo2csr(const SparseTensor &sparse) {
     return std::make_tuple(row_ptr, col_ind, value);
 }
 
-SparseTensor csr2coo(const Tensor &row_ptr_, const Tensor &col_ind, const Tensor &value, IntArrayRef size) {
+Tensor csr2coo(const Tensor &row_ptr_, const Tensor &col_ind, const Tensor &value, IntArrayRef size) {
     Tensor row_ptr = row_ptr_.masked_select(row_ptr_ < col_ind.size(0));
     // scatter_add is super slow for int64, due to non-hardware atomic operations
     // use int32 instead
@@ -120,7 +120,7 @@ void spmm_backward_out_cpu(const int64_t *row_ptr, const int64_t *col_ind, const
 }
 
 template <template<class> class NaryOp, template<class> class BinaryOp>
-Tensor spmm_forward_cpu(const SparseTensor &sparse, const Tensor &input_) {
+Tensor spmm_forward_cpu(const Tensor &sparse, const Tensor &input_) {
     constexpr const char *fn_name = "spmm_forward_cpu";
     TensorArg sparse_arg(sparse, "sparse", 1), input_arg(input_, "input", 2);
 
@@ -154,8 +154,8 @@ Tensor spmm_forward_cpu(const SparseTensor &sparse, const Tensor &input_) {
 }
 
 template <template<class> class NaryOp, template<class> class BinaryOp>
-std::tuple<SparseTensor, Tensor> spmm_backward_cpu(
-        const SparseTensor &sparse, const Tensor &input_, const Tensor &output_, const Tensor &output_grad_) {
+std::tuple<Tensor, Tensor> spmm_backward_cpu(
+        const Tensor &sparse, const Tensor &input_, const Tensor &output_, const Tensor &output_grad_) {
     constexpr const char *fn_name = "spmm_backward_cpu";
     TensorArg sparse_arg(sparse, "sparse", 1), input_arg(input_, "input", 2), output_arg(output_, "output", 3),
               output_grad_arg(output_grad_, "output_grad", 4);
@@ -172,7 +172,7 @@ std::tuple<SparseTensor, Tensor> spmm_backward_cpu(
     int64_t num_row = sparse.size(0);
     Tensor value_grad = at::zeros_like(sparse.values());
     Tensor input_grad = at::zeros_like(input);
-    SparseTensor sparse_grad = at::_sparse_coo_tensor_unsafe(sparse.indices(), value_grad, sparse.sizes());
+    Tensor sparse_grad = at::_sparse_coo_tensor_unsafe(sparse.indices(), value_grad, sparse.sizes());
 
     auto csr = coo2csr(sparse);
     Tensor row_ptr = std::get<0>(csr).contiguous();
@@ -199,13 +199,13 @@ std::tuple<SparseTensor, Tensor> spmm_backward_cpu(
 }
 
 #define DECLARE_FORWARD_IMPL(ADD, MUL, NARYOP, BINARYOP) \
-    Tensor spmm_##ADD##_##MUL##_forward_cpu(const SparseTensor &sparse, const Tensor &input) { \
+    Tensor spmm_##ADD##_##MUL##_forward_cpu(const Tensor &sparse, const Tensor &input) { \
         return spmm_forward_cpu<NARYOP, BINARYOP>(sparse, input);                              \
     }
 
 #define DECLARE_BACKWARD_IMPL(ADD, MUL, NARYOP, BINARYOP) \
-    std::tuple<SparseTensor, Tensor> spmm_##ADD##_##MUL##_backward_cpu(                                         \
-            const SparseTensor &sparse, const Tensor &input, const Tensor &output, const Tensor &output_grad) { \
+    std::tuple<Tensor, Tensor> spmm_##ADD##_##MUL##_backward_cpu(                                         \
+            const Tensor &sparse, const Tensor &input, const Tensor &output, const Tensor &output_grad) { \
         return spmm_backward_cpu<NARYOP, BINARYOP>(sparse, input, output, output_grad);                         \
     }
 

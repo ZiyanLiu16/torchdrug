@@ -187,4 +187,17 @@ def sparse_coo_tensor(indices, values, size):
 
 path = os.path.join(os.path.dirname(__file__), "extension")
 
-torch_ext = load_extension("torch_ext", [os.path.join(path, "torch_ext.cpp")])
+torch_ext = load_extension(
+    "torch_ext",
+    [os.path.join(path, "torch_ext.cpp")],
+    extra_cflags=[
+        "-Xpreprocessor", "-fopenmp",
+        "-I/usr/local/opt/libomp/include"
+    ],
+    extra_cuda_cflags=[
+        "-lomp",
+        "-L/usr/local/opt/libomp/lib"
+    ],
+    extra_include_paths=["/usr/local/opt/libomp/include"],
+    verbose=True,
+)
