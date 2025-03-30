@@ -1,4 +1,5 @@
 import os
+import pdb
 import sys
 import logging
 from itertools import islice
@@ -69,6 +70,8 @@ class Engine(core.Configurable):
 
         if gpus is None:
             self.device = torch.device("cpu")
+        elif gpus == "mps":
+            self.device = torch.device("mps")
         else:
             if len(gpus) != self.world_size:
                 error_msg = "World size is %d but found %d GPUs in the argument"
@@ -104,6 +107,8 @@ class Engine(core.Configurable):
             task._ddp_params_and_buffers_to_ignore = set(buffers_to_ignore)
         if self.device.type == "cuda":
             task = task.cuda(self.device)
+        elif self.device.type == "mps":
+            task = task.mps()
 
         self.model = task
         self.train_set = train_set
@@ -144,6 +149,11 @@ class Engine(core.Configurable):
                                                             find_unused_parameters=True)
             else:
                 model = nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
+
+        # mps doesn't work with nn.parallel.DistributedDataParallel
+        if self.device.type == "mps":
+            model = model.mps()
+
         model.train()
 
         for epoch in self.meter(num_epoch):
@@ -157,6 +167,8 @@ class Engine(core.Configurable):
             for batch_id, batch in enumerate(islice(dataloader, batch_per_epoch)):
                 if self.device.type == "cuda":
                     batch = utils.cuda(batch, device=self.device)
+                elif self.device.type == "mps":
+                    batch = batch.to(self.device, non_blocking=True)
 
                 loss, metric = model(batch)
                 if not loss.requires_grad:
@@ -209,6 +221,8 @@ class Engine(core.Configurable):
         for batch in dataloader:
             if self.device.type == "cuda":
                 batch = utils.cuda(batch, device=self.device)
+            elif self.device.type == "mps":
+                batch = batch.to(self.device, non_blocking=True)
 
             pred, target = model.predict_and_target(batch)
             preds.append(pred)

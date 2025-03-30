@@ -8,6 +8,7 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import torch
 from torch_scatter import scatter_add, scatter_min
+import pdb
 
 from torchdrug import core, utils
 from torchdrug.data import Dictionary
@@ -787,11 +788,14 @@ class Graph(core._MetaContainer):
         edge_list[:, :2] = edge_list[:, :2].flip(1)
         num_relation = self.num_relation
         if num_relation and add_inverse:
+            # add new (inveres) relation
             edge_list[:, 2] += num_relation
             num_relation = num_relation * 2
         edge_list = torch.stack([self.edge_list, edge_list], dim=1).flatten(0, 1)
 
+        # used to duplicate weights or the inverse new relations
         index = torch.arange(self.num_edge, device=self.device).unsqueeze(-1).expand(-1, 2).flatten()
+
         data_dict, meta_dict = self.data_mask(edge_index=index)
 
         return type(self)(edge_list, edge_weight=self.edge_weight[index], num_node=self.num_node,
@@ -968,6 +972,8 @@ class Graph(core._MetaContainer):
         device = torch.device(device)
         if device.type == "cpu":
             return self.cpu(*args, **kwargs)
+        elif device.type == "mps":
+            return self.mps()
         else:
             return self.cuda(device, *args, **kwargs)
 

@@ -1,5 +1,8 @@
 from collections.abc import Mapping, Sequence
 
+import pdb
+
+import torch
 from torch import nn
 
 
@@ -37,3 +40,35 @@ class Task(nn.Module):
 
     def evaluate(self, pred, target):
         raise NotImplementedError
+
+    def mps(self):
+        device = torch.device("mps")
+        self.recursive_to(obj=self, device=device)
+        return self
+
+    def recursive_to(self, obj, device, seen=None):
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            return obj
+        seen.add(obj_id)
+
+        if isinstance(obj, torch.Tensor):
+            return obj.to(device)
+        elif isinstance(obj, dict):
+            return {k: self.recursive_to(v, device, seen) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self.recursive_to(v, device, seen) for v in obj]
+        elif isinstance(obj, tuple):
+            return tuple(self.recursive_to(v, device, seen) for v in obj)
+        elif hasattr(obj, '__dict__'):
+            for key, value in obj.__dict__.items():
+                setattr(obj, key, self.recursive_to(value, device, seen))
+            return obj
+        elif hasattr(obj, 'to') and callable(getattr(obj, 'to')):
+            try:
+                return obj.to(device)
+            except Exception:
+                return obj
+        return obj

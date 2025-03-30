@@ -1,3 +1,4 @@
+import pdb
 import math
 import torch
 
@@ -57,6 +58,7 @@ class PerfectHash(object):
         self._construct_hash_table()
 
     def _construct_hash_table(self):
+        # TODO: address issue hashing on mps, which gives negative index
         index = self.hash(self.keys)
         count = index.bincount(minlength=self.num_output)
         for i in range(self.max_attempt):
