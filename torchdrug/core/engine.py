@@ -3,6 +3,8 @@ import sys
 import logging
 from itertools import islice
 
+from tqdm import tqdm
+
 import torch
 from torch import distributed as dist
 from torch import nn
@@ -154,7 +156,7 @@ class Engine(core.Configurable):
             # the last gradient update may contain less than gradient_interval batches
             gradient_interval = min(batch_per_epoch - start_id, self.gradient_interval)
 
-            for batch_id, batch in enumerate(islice(dataloader, batch_per_epoch)):
+            for batch_id, batch in tqdm(enumerate(islice(dataloader, batch_per_epoch))):
                 if self.device.type == "cuda":
                     batch = utils.cuda(batch, device=self.device)
 
